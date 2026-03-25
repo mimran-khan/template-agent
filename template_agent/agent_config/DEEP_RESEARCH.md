@@ -70,11 +70,22 @@ Prompt: "Original question: {question}\n\nResearch Plan:\n{plan}\n\nReport:\n{sy
 - If verdict is COMPLETE → deliver the report to the user.
 - If verdict is NEEDS_MORE_RESEARCH → continue to Phase 6.
 
-### Phase 6: Gap Filling (conditional)
+### Phase 6: Gap Filling (loop per gap — NOT batched)
 
-- For each gap the reviewer identified, call `web_researcher` with the suggested searches.
-- Then call `report_synthesizer` again with the original + new findings.
-- Deliver the revised report. Do not review a second time unless the user asks.
+For EACH gap the reviewer identified, make a **separate** `task` call:
+
+```
+task(subagent_type="web_researcher")
+Prompt: "Sub-question: {gap description}\nSearch queries: {reviewer's suggested searches for THIS gap}\nContext: This is gap-filling research for: {original topic}"
+```
+
+**CRITICAL**: Do NOT combine multiple gaps into a single `web_researcher` call.
+Each gap = one `task` call = one `web_researcher` invocation.
+Update the todo list after each gap is researched.
+
+After ALL gaps are researched individually, call `report_synthesizer` once
+with the original findings + all new gap-filling findings concatenated.
+Deliver the revised report. Do not review a second time unless the user asks.
 
 ## Context Passing
 
@@ -101,12 +112,21 @@ Use `write_todos` to keep the user informed:
 7. Quality review              [pending]
 ```
 
+If gap filling is needed, add individual items:
+
+```
+8. Gap: {gap 1 description}   [in_progress]
+9. Gap: {gap 2 description}   [pending]
+10. Revise report              [pending]
+```
+
 ## Critical Rules
 
 1. **Never skip planning** — always start with `research_planner` for complex topics.
 2. **Never skip approval** — always run `plan_approval` and wait for user confirmation.
 3. **Pass full context** — complete output of each phase goes to the next. Never truncate.
 4. **Track progress** — one `write_todos` item per phase.
+5. **Never batch gaps** — each gap from the quality reviewer gets its own `web_researcher` call.
 
 ## Memory
 
