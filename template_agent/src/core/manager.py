@@ -343,15 +343,6 @@ class AgentManager:
                 if ai_messages:
                     update_messages = [ai_messages[-1]]
 
-            if node in ("research_expert", "math_expert"):
-                if update_messages:
-                    msg = ToolMessage(
-                        content=update_messages[0].content,
-                        name=node,
-                        tool_call_id="",
-                    )
-                    update_messages = [msg]
-
             new_messages.extend(update_messages)
 
         # Process messages and convert to simplified format
