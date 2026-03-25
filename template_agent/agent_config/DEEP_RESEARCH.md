@@ -100,24 +100,35 @@ Never summarize or truncate context between phases.
 
 ## Progress Tracking
 
-Use `write_todos` to keep the user informed:
+Use `write_todos` to keep the user informed. **Update the todo list at every phase transition.**
 
+### Before plan approval (generic):
 ```
-1. Create research plan        [completed]
-2. Plan approval               [awaiting user]
-3. Research: {sub-question 1}  [completed]
-4. Research: {sub-question 2}  [in_progress]
-5. Research: {sub-question 3}  [pending]
-6. Synthesize report           [pending]
-7. Quality review              [pending]
+1. Create research plan        [in_progress]
+2. Plan approval               [pending]
+3. Research sub-questions       [pending]
+4. Synthesize report           [pending]
+5. Quality review              [pending]
 ```
 
-If gap filling is needed, add individual items:
-
+### After plan is approved — EXPAND into actual sub-questions:
+**CRITICAL**: Replace the generic "Research sub-questions" with one item PER sub-question
+using the actual text from the approved plan.
 ```
-8. Gap: {gap 1 description}   [in_progress]
-9. Gap: {gap 2 description}   [pending]
-10. Revise report              [pending]
+1. Create research plan                                   [completed]
+2. Plan approval                                          [completed]
+3. Research: {actual sub-question 1 text from plan}       [in_progress]
+4. Research: {actual sub-question 2 text from plan}       [pending]
+5. Research: {actual sub-question 3 text from plan}       [pending]
+6. Synthesize report                                      [pending]
+7. Quality review                                         [pending]
+```
+
+### If gap filling is needed — ADD individual gap items:
+```
+8. Gap: {specific gap description from reviewer}          [in_progress]
+9. Gap: {specific gap description from reviewer}          [pending]
+10. Revise report                                         [pending]
 ```
 
 ## Critical Rules
@@ -125,7 +136,7 @@ If gap filling is needed, add individual items:
 1. **Never skip planning** — always start with `research_planner` for complex topics.
 2. **Never skip approval** — always run `plan_approval` and wait for user confirmation.
 3. **Pass full context** — complete output of each phase goes to the next. Never truncate.
-4. **Track progress** — one `write_todos` item per phase.
+4. **Track progress** — after plan approval, expand the todo list to show each sub-question individually. Never use a generic "Research sub-questions" item.
 5. **Never batch gaps** — each gap from the quality reviewer gets its own `web_researcher` call.
 
 ## Memory

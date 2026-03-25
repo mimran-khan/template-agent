@@ -70,13 +70,6 @@ async def get_template_agent(sso_token: str | None = None):
                 else {},
             }
 
-            # Add SSL verification setting (verify=False disables cert verification)
-            if not settings.MCP_SSL_VERIFY:
-                server_config["verify"] = False
-                logger.warning(
-                    "SSL certificate verification disabled for MCP connection"
-                )
-
             client = MultiServerMCPClient({settings.MCP_SERVER_NAME: server_config})
             return await client.get_tools()
 
