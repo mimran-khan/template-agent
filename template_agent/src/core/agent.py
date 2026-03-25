@@ -200,8 +200,11 @@ async def get_template_agent(sso_token: str | None = None):
     if not memory_files:
         logger.warning(f"No .md memory files found in {CONFIG_DIR}")
 
-    # Setup backend for deep agent
-    backend = LocalShellBackend(root_dir=str(REPO_ROOT))
+    # Sandbox directory for agent shell execution — keeps output files
+    # out of the source tree (e.g., scraped pages, intermediate results).
+    sandbox_dir = REPO_ROOT / ".cache" / "agent-workspace"
+    sandbox_dir.mkdir(parents=True, exist_ok=True)
+    backend = LocalShellBackend(root_dir=str(sandbox_dir))
 
     # Resolve checkpointer and store
     checkpointer = None
