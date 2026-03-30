@@ -36,14 +36,14 @@ class TestSubagentParsing:
         assert "body" in config
         assert len(config["body"]) > 0
 
-    def test_email_dispatcher_frontmatter(self):
-        """Test email-dispatcher subagent frontmatter parsing."""
-        agent_file = AGENTS_DIR / "email-dispatcher.md"
+    def test_publisher_frontmatter(self):
+        """Test publisher subagent frontmatter parsing."""
+        agent_file = AGENTS_DIR / "publisher.md"
         assert agent_file.exists(), f"Missing: {agent_file}"
 
         config = _parse_agent_frontmatter(agent_file)
 
-        assert config["name"] == "email-dispatcher"
+        assert config["name"] == "publisher"
         assert "description" in config
         assert "body" in config
 
@@ -56,9 +56,9 @@ class TestSubagentParsing:
         assert "calculate_bmi" in config["tools"]
         assert "search_web" in config["tools"]
 
-    def test_email_dispatcher_has_send_email_tool(self):
-        """Test email-dispatcher declares send_email tool."""
-        agent_file = AGENTS_DIR / "email-dispatcher.md"
+    def test_publisher_has_send_email_tool(self):
+        """Test publisher declares send_email tool."""
+        agent_file = AGENTS_DIR / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
 
         assert "tools" in config
@@ -72,9 +72,9 @@ class TestSubagentParsing:
         assert "skills" in config
         assert "bmi-report" in config["skills"]
 
-    def test_email_dispatcher_has_email_formatter_skill(self):
-        """Test email-dispatcher references email-formatter skill."""
-        agent_file = AGENTS_DIR / "email-dispatcher.md"
+    def test_publisher_has_email_formatter_skill(self):
+        """Test publisher references email-formatter skill."""
+        agent_file = AGENTS_DIR / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
 
         assert "skills" in config
@@ -217,9 +217,9 @@ class TestSubagentBusinessLogic:
             or "not compute" in body.lower()
         )
 
-    def test_email_dispatcher_sends_immediately(self):
-        """Test email-dispatcher configured to send without confirmation."""
-        agent_file = AGENTS_DIR / "email-dispatcher.md"
+    def test_publisher_sends_immediately(self):
+        """Test publisher configured to send without confirmation."""
+        agent_file = AGENTS_DIR / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -230,9 +230,9 @@ class TestSubagentBusinessLogic:
             or "no confirmation" in body.lower()
         )
 
-    def test_email_dispatcher_gmail_compatibility(self):
-        """Test email-dispatcher emphasizes Gmail compatibility."""
-        agent_file = AGENTS_DIR / "email-dispatcher.md"
+    def test_publisher_gmail_compatibility(self):
+        """Test publisher emphasizes Gmail compatibility."""
+        agent_file = AGENTS_DIR / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -277,9 +277,9 @@ class TestSubagentCoordination:
 
         assert "out of scope" in body.lower()
 
-    def test_email_dispatcher_out_of_scope(self):
-        """Test email-dispatcher defines out-of-scope items."""
-        agent_file = AGENTS_DIR / "email-dispatcher.md"
+    def test_publisher_out_of_scope(self):
+        """Test publisher defines out-of-scope items."""
+        agent_file = AGENTS_DIR / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -295,7 +295,7 @@ class TestSystemPromptIntegration:
         content = system_prompt_file.read_text()
 
         assert "analyst" in content
-        assert "email-dispatcher" in content
+        assert "publisher" in content
 
     def test_system_prompt_references_client_intake_skill(self):
         """Test system-prompt.md references client-intake skill."""

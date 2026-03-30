@@ -105,9 +105,9 @@ class TestSubagentConfiguration:
         # No duplicate tools
         assert len(config["tools"]) == len(set(config["tools"]))
 
-    def test_email_dispatcher_skill_configuration(self):
-        """Test email-dispatcher skill configuration is valid."""
-        agent_file = CONFIG_DIR / "agents" / "email-dispatcher.md"
+    def test_publisher_skill_configuration(self):
+        """Test publisher skill configuration is valid."""
+        agent_file = CONFIG_DIR / "agents" / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
 
         # All skills should be strings
@@ -134,9 +134,9 @@ class TestSkillAvailability:
             skill_file = skill_dir / "SKILL.md"
             assert skill_file.exists(), f"Missing skill: {skill_name}"
 
-    def test_email_dispatcher_skills_exist(self):
-        """Test email-dispatcher referenced skills exist."""
-        agent_file = CONFIG_DIR / "agents" / "email-dispatcher.md"
+    def test_publisher_skills_exist(self):
+        """Test publisher referenced skills exist."""
+        agent_file = CONFIG_DIR / "agents" / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
 
         skills_dir = CONFIG_DIR / "skills"
@@ -229,9 +229,9 @@ class TestSubagentResponsibilities:
         lower_body = body.lower()
         assert "out of scope" in lower_body
 
-    def test_email_dispatcher_should_not_analyze(self):
-        """Test email-dispatcher out-of-scope includes analysis."""
-        agent_file = CONFIG_DIR / "agents" / "email-dispatcher.md"
+    def test_publisher_should_not_analyze(self):
+        """Test publisher out-of-scope includes analysis."""
+        agent_file = CONFIG_DIR / "agents" / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -275,9 +275,9 @@ class TestErrorHandling:
 
         assert "error" in body.lower() or "failure" in body.lower()
 
-    def test_email_dispatcher_has_error_handling_section(self):
-        """Test email-dispatcher defines error handling."""
-        agent_file = CONFIG_DIR / "agents" / "email-dispatcher.md"
+    def test_publisher_has_error_handling_section(self):
+        """Test publisher defines error handling."""
+        agent_file = CONFIG_DIR / "agents" / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -295,9 +295,9 @@ class TestGotchasSections:
 
         assert "gotcha" in body.lower()
 
-    def test_email_dispatcher_has_gotchas(self):
-        """Test email-dispatcher has gotchas section."""
-        agent_file = CONFIG_DIR / "agents" / "email-dispatcher.md"
+    def test_publisher_has_gotchas(self):
+        """Test publisher has gotchas section."""
+        agent_file = CONFIG_DIR / "agents" / "publisher.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 

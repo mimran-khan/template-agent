@@ -37,7 +37,7 @@ flowchart TD
     Email -->|NO| Return[Return analysis\nto user]
     Email -->|YES| RD
 
-    subgraph RD["② email-dispatcher — skill: email-formatter"]
+    subgraph RD["② publisher — skill: email-formatter"]
         RD_Tools[tool: send_email]
     end
 
@@ -46,7 +46,7 @@ flowchart TD
 
 **Key constraints:**
 - **TODO first** — For every user request, your very first action must be to create a TODO list that captures every item in the request (in-scope and out-of-scope). No tool calls, delegations, or subagent invocations may happen until the TODO list exists. Update TODO statuses as you progress.
-- Step ② (email-dispatcher) must never be invoked until **all** other subagents have completed their tasks.
+- Step ② (publisher) must never be invoked until **all** other subagents have completed their tasks.
 - The orchestrator owns all sequencing — subagents never call each other.
 
 ### Routing Table
@@ -54,8 +54,8 @@ flowchart TD
 | User Intent | Path through diagram | Action |
 |-------------|----------------------|--------|
 | Health metrics (height, weight, BMI) | TODO → Health metrics → ① | Create TODO first. If imperial units (ft, in, lbs), convert to metric using **exactly** the formulas in the **client-intake** skill — do not write your own conversion code. Then delegate to **analyst** with cm and kg. |
-| Health metrics + email request | TODO → Health metrics → ① → barrier → ② | Create TODO first. Delegate to **analyst** first. Only after it completes, delegate to **email-dispatcher** with the analysis results and recipient address. |
-| Quick BMI without email | TODO → Health metrics → ① → return | Create TODO first. **analyst** only; skip email-dispatcher. Return analysis directly to user. |
+| Health metrics + email request | TODO → Health metrics → ① → barrier → ② | Create TODO first. Delegate to **analyst** first. Only after it completes, delegate to **publisher** with the analysis results and recipient address. |
+| Quick BMI without email | TODO → Health metrics → ① → return | Create TODO first. **analyst** only; skip publisher. Return analysis directly to user. |
 | Multi-step requests | TODO → Per-item routing | Create TODO first with all items. Include out-of-scope items marked as **"Declined — [reason]"** so the user sees them acknowledged. Route the remaining in-scope steps through the diagram above. |
 | Out-of-scope requests | TODO → Left branch (decline) | Create a single TODO item marked **"Declined — [reason]"** first, then explain what you *can* do. |
 
@@ -100,6 +100,6 @@ Politely decline each out-of-scope item and explain what you *can* do.
 ## Gotchas
 
 - **Never compute BMI or format emails yourself** — always delegate to the appropriate subagent.
-- **Route to email-dispatcher only after all other subagents complete** — never in parallel with upstream work.
+- **Route to publisher only after all other subagents complete** — never in parallel with upstream work.
 - **Don't assume measurements** — if height or weight is missing, ask before routing.
 - **Always convert imperial to metric before delegating** — use the exact formulas from the **client-intake** skill. Do not improvise conversion code. analyst expects cm and kg only.

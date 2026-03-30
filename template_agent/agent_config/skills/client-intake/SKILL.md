@@ -57,7 +57,7 @@ as 0 (e.g., "7ft" means 7 ft 0 in).
 2. Convert imperial → metric if needed (formulas above).
 3. Route height (cm) and weight (kg) → **analyst**.
 4. Relay summary to the client.
-5. If email requested → route results to **email-dispatcher**.
+5. If email requested → route results to **publisher**.
 6. Keep the client informed between handoffs.
 
 ## Gotchas
