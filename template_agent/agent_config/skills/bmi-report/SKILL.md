@@ -10,6 +10,10 @@ description: >
 Reference for BMI classification, report structure, and tone when generating
 a BMI analysis. Use this to produce consistent, category-specific reports.
 
+## When to Use
+
+When generating a BMI analysis report for a user based on calculated BMI value and category.
+
 ## BMI Categories
 
 | Range | Category |
