@@ -24,13 +24,13 @@ class TestSubagentParsing:
     """Test subagent .md file parsing and structure."""
 
     def test_bmi_analyst_frontmatter(self):
-        """Test bmi-analyst subagent frontmatter parsing."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst subagent frontmatter parsing."""
+        agent_file = AGENTS_DIR / "analyst.md"
         assert agent_file.exists(), f"Missing: {agent_file}"
 
         config = _parse_agent_frontmatter(agent_file)
 
-        assert config["name"] == "bmi-analyst"
+        assert config["name"] == "analyst"
         assert "description" in config
         assert len(config["description"]) > 0
         assert "body" in config
@@ -48,8 +48,8 @@ class TestSubagentParsing:
         assert "body" in config
 
     def test_bmi_analyst_has_required_tools(self):
-        """Test bmi-analyst declares required tools."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst declares required tools."""
+        agent_file = AGENTS_DIR / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
 
         assert "tools" in config
@@ -65,8 +65,8 @@ class TestSubagentParsing:
         assert "send_email" in config["tools"]
 
     def test_bmi_analyst_has_bmi_report_skill(self):
-        """Test bmi-analyst references bmi-report skill."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst references bmi-report skill."""
+        agent_file = AGENTS_DIR / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
 
         assert "skills" in config
@@ -185,8 +185,8 @@ class TestSubagentBusinessLogic:
     """Test business logic requirements in subagent prompts."""
 
     def test_bmi_analyst_requires_metric_units(self):
-        """Test bmi-analyst expects cm and kg."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst expects cm and kg."""
+        agent_file = AGENTS_DIR / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -195,8 +195,8 @@ class TestSubagentBusinessLogic:
         assert "metric" in body.lower()
 
     def test_bmi_analyst_workflow_steps(self):
-        """Test bmi-analyst defines complete workflow."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst defines complete workflow."""
+        agent_file = AGENTS_DIR / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -205,8 +205,8 @@ class TestSubagentBusinessLogic:
         assert "search_web" in body
 
     def test_bmi_analyst_prohibits_inline_computation(self):
-        """Test bmi-analyst forbids manual calculations."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst forbids manual calculations."""
+        agent_file = AGENTS_DIR / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -270,8 +270,8 @@ class TestSubagentCoordination:
     """Test subagent coordination and delegation rules."""
 
     def test_bmi_analyst_out_of_scope(self):
-        """Test bmi-analyst defines out-of-scope items."""
-        agent_file = AGENTS_DIR / "bmi-analyst.md"
+        """Test analyst defines out-of-scope items."""
+        agent_file = AGENTS_DIR / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -294,7 +294,7 @@ class TestSystemPromptIntegration:
         system_prompt_file = CONFIG_DIR / "system-prompt.md"
         content = system_prompt_file.read_text()
 
-        assert "bmi-analyst" in content
+        assert "analyst" in content
         assert "email-dispatcher" in content
 
     def test_system_prompt_references_client_intake_skill(self):

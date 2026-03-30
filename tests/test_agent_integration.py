@@ -95,8 +95,8 @@ class TestSubagentConfiguration:
     """Test subagent configuration structure."""
 
     def test_bmi_analyst_tool_configuration(self):
-        """Test bmi-analyst tool configuration is valid."""
-        agent_file = CONFIG_DIR / "agents" / "bmi-analyst.md"
+        """Test analyst tool configuration is valid."""
+        agent_file = CONFIG_DIR / "agents" / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
 
         # All tools should be strings
@@ -124,8 +124,8 @@ class TestSkillAvailability:
     """Test that skills referenced by subagents exist."""
 
     def test_bmi_analyst_skills_exist(self):
-        """Test bmi-analyst referenced skills exist."""
-        agent_file = CONFIG_DIR / "agents" / "bmi-analyst.md"
+        """Test analyst referenced skills exist."""
+        agent_file = CONFIG_DIR / "agents" / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
 
         skills_dir = CONFIG_DIR / "skills"
@@ -220,8 +220,8 @@ class TestSubagentResponsibilities:
     """Test clear separation of responsibilities between subagents."""
 
     def test_bmi_analyst_should_not_send_email(self):
-        """Test bmi-analyst out-of-scope includes email sending."""
-        agent_file = CONFIG_DIR / "agents" / "bmi-analyst.md"
+        """Test analyst out-of-scope includes email sending."""
+        agent_file = CONFIG_DIR / "agents" / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -268,8 +268,8 @@ class TestErrorHandling:
     """Test error handling specifications in subagents."""
 
     def test_bmi_analyst_has_error_handling_section(self):
-        """Test bmi-analyst defines error handling."""
-        agent_file = CONFIG_DIR / "agents" / "bmi-analyst.md"
+        """Test analyst defines error handling."""
+        agent_file = CONFIG_DIR / "agents" / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
@@ -288,8 +288,8 @@ class TestGotchasSections:
     """Test that subagents have 'Gotchas' sections for common mistakes."""
 
     def test_bmi_analyst_has_gotchas(self):
-        """Test bmi-analyst has gotchas section."""
-        agent_file = CONFIG_DIR / "agents" / "bmi-analyst.md"
+        """Test analyst has gotchas section."""
+        agent_file = CONFIG_DIR / "agents" / "analyst.md"
         config = _parse_agent_frontmatter(agent_file)
         body = config["body"]
 
