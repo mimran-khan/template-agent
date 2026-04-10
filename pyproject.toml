@@ -29,6 +29,8 @@ dependencies = [
     "structlog==25.5.0",
     "pyyaml==6.0.3",
     "streamlit==1.55.0",
+    "daytona",
+    "langchain-daytona==0.0.4",
 ]
 
 [project.optional-dependencies]

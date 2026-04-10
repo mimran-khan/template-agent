@@ -1,167 +1,154 @@
-"""Locked-down LocalShellBackend with an isolated venv.
+"""Daytona sandbox backend for the Deep Agent.
 
-Creates a fresh virtual environment in the system temp directory (never reusing
-the project's own ``.venv``).  Dependencies are driven by a caller-supplied
-``pyproject.toml`` which is copied into the venv and installed via
-``pip install .``.
+Uses the Daytona SDK to create an isolated sandbox environment and wraps it
+with ``langchain_daytona.DaytonaSandbox`` which implements the Deep Agents
+``BackendProtocol``.  The agent runs on the host and calls sandbox APIs
+remotely (the "Sandbox as Tool" pattern).
+
+After sandbox creation the local ``agent_config/`` tree is uploaded so that
+``SkillsMiddleware`` — which resolves skills via ``backend.ls()`` /
+``backend.download_files()`` — can find definitions inside the sandbox.
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
-import shutil
-import subprocess
-import sys
-import tempfile
 from pathlib import Path
 
-from deepagents.backends import LocalShellBackend
+from daytona import Daytona, DaytonaConfig
+from langchain_daytona import DaytonaSandbox
 
+from template_agent.src.settings import settings
 from template_agent.utils.pylogger import get_python_logger
 
 logger = get_python_logger()
 
-SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
-_PASSTHROUGH_VARS = ("HOME", "USER", "LANG", "LC_ALL", "TZ", "TERM")
+SANDBOX_CONFIG_ROOT = "/home/daytona/agent_config"
+
+LOCAL_CONFIG_DIR = Path(__file__).parent.parent.parent / "agent_config"
+
+_backend: DaytonaSandbox | None = None
+_daytona_client: Daytona | None = None
 
 
-def _base_python() -> str:
-    """Resolve the base (non-venv) Python so the agent venv is independent."""
-    if sys.prefix != sys.base_prefix:
-        candidate = Path(sys.base_prefix) / "bin" / "python3"
-        if candidate.exists():
-            return str(candidate)
-    return sys.executable
+def _upload_agent_config(backend: DaytonaSandbox) -> None:
+    """Upload the local ``agent_config/`` tree into the Daytona sandbox.
 
-
-def _ensure_venv(root_dir: Path, pyproject: Path) -> Path:
-    """Create an isolated venv under ``$TMPDIR`` and install from *pyproject*.
-
-    The venv directory is keyed by a hash of *root_dir* **and** the contents of
-    *pyproject* so a changed ``pyproject.toml`` triggers a reinstall.
+    ``SkillsMiddleware`` calls ``backend.ls()`` and
+    ``backend.download_files()`` to load skill definitions, so every file
+    must be present inside the sandbox filesystem before the agent is
+    created.
     """
-    project_hash = hashlib.sha256(str(root_dir.resolve()).encode()).hexdigest()[:12]
-    toml_hash = hashlib.sha256(pyproject.read_bytes()).hexdigest()[:8]
-    venv_dir = Path(tempfile.gettempdir()) / f"agent-venv-{project_hash}"
-    stamp = venv_dir / ".toml_hash"
+    files: list[tuple[str, bytes]] = []
 
-    needs_install = False
+    for root, _dirs, filenames in os.walk(LOCAL_CONFIG_DIR):
+        for fname in filenames:
+            local_path = Path(root) / fname
+            rel = local_path.relative_to(LOCAL_CONFIG_DIR)
+            remote_path = f"{SANDBOX_CONFIG_ROOT}/{rel}"
+            files.append((remote_path, local_path.read_bytes()))
 
-    if not (venv_dir / "bin" / "python").exists():
-        base = _base_python()
-        logger.info(f"Creating agent venv at {venv_dir} (python: {base})")
-        subprocess.run(
-            [base, "-m", "venv", "--clear", str(venv_dir)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        needs_install = True
+    if not files:
+        logger.warning("No agent_config files found to upload to sandbox")
+        return
 
-    if not needs_install and stamp.exists() and stamp.read_text() == toml_hash:
-        logger.info(f"Agent venv up-to-date ({venv_dir})")
-        return venv_dir
-
-    pkg_dir = venv_dir / "_pkg"
-    pkg_dir.mkdir(exist_ok=True)
-    shutil.copy2(pyproject, pkg_dir / "pyproject.toml")
-
-    pip = str(venv_dir / "bin" / "pip")
-    logger.info(f"Installing dependencies from {pyproject.name}")
-    result = subprocess.run(
-        [pip, "install", "--quiet", str(pkg_dir)],
-        capture_output=True,
-        text=True,
+    logger.info(
+        f"Uploading {len(files)} agent_config files to sandbox "
+        f"at {SANDBOX_CONFIG_ROOT}"
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"pip install failed: {result.stderr.strip()}")
+    responses = backend.upload_files(files)
 
-    stamp.write_text(toml_hash)
-    return venv_dir
-
-
-def _build_env(venv_dir: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
-    """Minimal env: allowlisted host vars + venv activation + optional overrides."""
-    env = {k: os.environ[k] for k in _PASSTHROUGH_VARS if k in os.environ}
-    env["VIRTUAL_ENV"] = str(venv_dir)
-    env["PATH"] = f"{venv_dir}/bin:{SYSTEM_PATH}"
-    if extra:
-        env.update(extra)
-    return env
+    errors = [r for r in responses if r.error]
+    if errors:
+        for err in errors:
+            logger.error(f"Failed to upload to sandbox: {err.path} — {err.error}")
+        raise RuntimeError(
+            f"Failed to upload {len(errors)} file(s) to Daytona sandbox"
+        )
+    logger.info(f"All {len(files)} agent_config files uploaded to sandbox")
 
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "agent_config"
-
-_backend: LocalShellBackend | None = None
+def _get_daytona_client() -> Daytona:
+    """Return a singleton Daytona API client configured from settings."""
+    global _daytona_client
+    if _daytona_client is None:
+        config = DaytonaConfig(
+            api_key=settings.DAYTONA_API_KEY or "",
+            api_url=settings.DAYTONA_API_URL,
+            target=settings.DAYTONA_TARGET,
+        )
+        _daytona_client = Daytona(config)
+    return _daytona_client
 
 
 def create_backend(
-    root_dir: Path,
-    pyproject: Path,
     *,
-    timeout: int = 120,
-    max_output_bytes: int = 100_000,
-    extra_env: dict[str, str] | None = None,
-) -> LocalShellBackend:
-    """Create a :class:`LocalShellBackend` backed by an isolated agent venv.
+    timeout: int | None = None,
+) -> DaytonaSandbox:
+    """Create a :class:`DaytonaSandbox` backed by a remote Daytona sandbox.
+
+    After sandbox creation the local ``agent_config/`` tree is uploaded so
+    that ``SkillsMiddleware`` can find skill definitions via the backend.
 
     Args:
-        root_dir: Shell working directory.
-        pyproject: Path to a ``pyproject.toml`` whose dependencies are installed.
-        timeout: Default per-command timeout in seconds.
-        max_output_bytes: Max captured output before truncation.
-        extra_env: Extra env vars (highest priority).
+        timeout: Per-command timeout in seconds.  Falls back to
+            ``settings.DAYTONA_SANDBOX_TIMEOUT``.
     """
-    if not pyproject.is_file():
-        raise FileNotFoundError(f"pyproject.toml not found: {pyproject}")
+    effective_timeout = timeout or settings.DAYTONA_SANDBOX_TIMEOUT
 
-    venv_dir = _ensure_venv(root_dir, pyproject)
-    env = _build_env(venv_dir, extra_env)
+    client = _get_daytona_client()
+    sandbox = client.create()
+    logger.info(f"Daytona sandbox created: {sandbox.id}")
 
-    logger.info(f"Backend ready — venv={venv_dir}, pyproject={pyproject}")
-    return LocalShellBackend(
-        root_dir=str(root_dir),
-        virtual_mode=False,
-        timeout=timeout,
-        max_output_bytes=max_output_bytes,
-        env=env,
+    backend = DaytonaSandbox(
+        sandbox=sandbox,
+        timeout=effective_timeout,
     )
+    logger.info(
+        f"DaytonaSandbox backend ready — sandbox={sandbox.id}, "
+        f"timeout={effective_timeout}s"
+    )
+
+    _upload_agent_config(backend)
+
+    return backend
 
 
 def get_backend(
-    root_dir: Path | None = None,
-    pyproject: Path | None = None,
     *,
-    timeout: int = 120,
-    max_output_bytes: int = 100_000,
-    extra_env: dict[str, str] | None = None,
-) -> LocalShellBackend:
+    timeout: int | None = None,
+) -> DaytonaSandbox:
     """Return the singleton backend, creating it on the first call.
 
     Subsequent calls return the same instance regardless of arguments.
-    When *root_dir* or *pyproject* are ``None`` the module-level defaults
-    (``_REPO_ROOT`` / ``_CONFIG_DIR``) are used.
     """
-    global _backend  # noqa: PLW0603
+    global _backend
     if _backend is None:
-        _backend = create_backend(
-            root_dir or _REPO_ROOT,
-            pyproject or (_CONFIG_DIR / "pyproject.toml"),
-            timeout=timeout,
-            max_output_bytes=max_output_bytes,
-            extra_env=extra_env,
-        )
+        _backend = create_backend(timeout=timeout)
     return _backend
 
 
-def initialize_backend() -> LocalShellBackend:
+def initialize_backend() -> DaytonaSandbox:
     """Pre-initialize the singleton backend at server startup.
 
-    Calling this early avoids the venv-creation penalty on the first request.
+    Calling this early avoids sandbox-creation latency on the first request.
     """
-    logger.info("Pre-initializing backend (venv + dependency install)")
+    logger.info("Pre-initializing Daytona sandbox backend")
     backend = get_backend()
-    logger.info("Backend initialization complete")
+    logger.info("Daytona sandbox backend initialization complete")
     return backend
+
+
+def cleanup_backend() -> None:
+    """Stop the sandbox and release resources on server shutdown."""
+    global _backend, _daytona_client
+    if _backend is not None:
+        try:
+            sandbox = _backend._sandbox  # noqa: SLF001
+            client = _get_daytona_client()
+            client.remove(sandbox)
+            logger.info(f"Daytona sandbox {sandbox.id} removed")
+        except Exception:
+            logger.warning("Failed to remove Daytona sandbox", exc_info=True)
+        _backend = None
+    _daytona_client = None

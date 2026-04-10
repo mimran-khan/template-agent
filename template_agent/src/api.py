@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from template_agent.src.core.backend import initialize_backend
+from template_agent.src.core.backend import cleanup_backend, initialize_backend
 from template_agent.src.core.exceptions.exceptions import AppException, AppExceptionCode
 from template_agent.src.core.storage import initialize_database
 from template_agent.src.routes.feedback import router as feedback_router
@@ -131,16 +131,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.critical(f"Failed to initialize database on startup: {e}")
         raise
 
-    # Pre-initialize the shell backend (venv + deps) so the first request is fast
+    # Pre-initialize the Daytona sandbox so the first request is fast
     try:
         initialize_backend()
     except Exception as e:
-        logger.critical(f"Failed to initialize backend on startup: {e}")
+        logger.critical(f"Failed to initialize Daytona sandbox backend on startup: {e}")
         raise
 
     logger.info("Agent server ready - MCP connection will be established per-request")
     yield
     logger.info("Agent server shutting down")
+    cleanup_backend()
 
 
 # Create FastAPI application with lifespan management

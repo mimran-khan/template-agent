@@ -16,7 +16,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-from template_agent.src.core.backend import get_backend
+from template_agent.src.core.backend import SANDBOX_CONFIG_ROOT, get_backend
 from template_agent.src.core.exceptions.exceptions import AppException, AppExceptionCode
 from template_agent.src.core.prompt import get_system_prompt
 from template_agent.src.core.storage import get_global_checkpoint, get_global_store
@@ -180,11 +180,17 @@ async def get_template_agent(sso_token: str | None = None):
     logger.info(f"Loading subagents from {agents_dir}")
 
     tool_by_name = {t.name: t for t in tools}
-    skills_base = CONFIG_DIR / "skills"
+    local_skills_base = CONFIG_DIR / "skills"
+    sandbox_skills_base = f"{SANDBOX_CONFIG_ROOT}/skills"
 
-    # Main agent skills — flat directory under skills/
-    main_skills_dir = skills_base / "client-intake"
-    main_skills_path = [str(main_skills_dir)] if main_skills_dir.exists() else []
+    # Main agent skills — checked locally, but resolved to sandbox paths
+    # so SkillsMiddleware accesses them through the DaytonaSandbox backend.
+    local_main_skills = local_skills_base / "client-intake"
+    main_skills_path = (
+        [f"{sandbox_skills_base}/client-intake"]
+        if local_main_skills.exists()
+        else []
+    )
 
     subagents_config: list[SubAgent] | None = None
     if agents_dir.is_dir():
@@ -226,18 +232,21 @@ async def get_template_agent(sso_token: str | None = None):
                     )
                 sa["tools"] = resolved
 
-            # Resolve skill names to paths under skills/
+            # Resolve skill names — check local existence, use sandbox paths
             skill_names = config.get("skills", [])
             if skill_names:
                 skill_paths: list[str] = []
                 for skill_name in skill_names:
-                    skill_dir = skills_base / skill_name
-                    if skill_dir.exists():
-                        skill_paths.append(str(skill_dir))
-                        logger.info(f"Subagent '{name}' skill loaded: {skill_dir}")
+                    local_skill_dir = local_skills_base / skill_name
+                    sandbox_skill_path = f"{sandbox_skills_base}/{skill_name}"
+                    if local_skill_dir.exists():
+                        skill_paths.append(sandbox_skill_path)
+                        logger.info(
+                            f"Subagent '{name}' skill → {sandbox_skill_path}"
+                        )
                     else:
                         logger.warning(
-                            f"Subagent '{name}' skill not found: {skill_dir}"
+                            f"Subagent '{name}' skill not found: {local_skill_dir}"
                         )
                 if skill_paths:
                     sa["skills"] = skill_paths
@@ -252,9 +261,9 @@ async def get_template_agent(sso_token: str | None = None):
     logger.info("Loaded system prompt from agent_config/system-prompt.md")
 
     if main_skills_path:
-        logger.info(f"Main agent skills: {main_skills_dir}")
+        logger.info(f"Main agent skills: {main_skills_path}")
     else:
-        logger.warning(f"Main agent skills directory not found: {main_skills_dir}")
+        logger.warning("No main agent skills configured")
 
     backend = get_backend()
 

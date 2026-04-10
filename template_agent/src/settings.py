@@ -121,6 +121,27 @@ class Settings(BaseSettings):
         },
     )
 
+    # Daytona Sandbox Configuration
+    DAYTONA_API_KEY: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"env": "DAYTONA_API_KEY"},
+    )
+    DAYTONA_API_URL: str = Field(
+        default="https://app.daytona.io/api",
+        json_schema_extra={"env": "DAYTONA_API_URL"},
+    )
+    DAYTONA_TARGET: str = Field(
+        default="us",
+        json_schema_extra={"env": "DAYTONA_TARGET"},
+    )
+    DAYTONA_SANDBOX_TIMEOUT: int = Field(
+        default=300,
+        json_schema_extra={
+            "env": "DAYTONA_SANDBOX_TIMEOUT",
+            "description": "Timeout in seconds for sandbox command execution",
+        },
+    )
+
     # Request Logging Configuration
     REQUEST_LOGGING_ENABLED: bool = Field(
         default=True,
