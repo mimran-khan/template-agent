@@ -1,7 +1,7 @@
 """MCP client initialization and connection utilities.
 
 This module handles connecting to one or more MCP servers defined in
-``agent_config/mcp_servers.json`` and retrieving their tools, with
+``agent_config/mcp.json`` and retrieving their tools, with
 parallel connections, per-server auth/SSL/timeout, fault isolation,
 and tool-name deduplication.
 
@@ -23,7 +23,7 @@ from template_agent.utils.pylogger import get_python_logger
 logger = get_python_logger(log_level=settings.PYTHON_LOG_LEVEL)
 
 _CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "agent_config" / "mcp_servers.json"
+    Path(__file__).resolve().parent.parent.parent / "agent_config" / "mcp.json"
 )
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ def _load_server_configs() -> dict[str, dict]:
 
 
 def _load_from_json() -> dict[str, dict]:
-    """Parse and validate ``mcp_servers.json``."""
+    """Parse and validate ``mcp.json``."""
     try:
         data = json.loads(_CONFIG_PATH.read_bytes())
     except json.JSONDecodeError as exc:
@@ -77,7 +77,7 @@ def _load_from_json() -> dict[str, dict]:
 
 def _fallback_from_settings() -> dict[str, dict]:
     """Build a single-server config dict from Settings env vars."""
-    logger.info("No mcp_servers.json found; falling back to env-var config")
+    logger.info("No mcp.json found; falling back to env-var config")
     return {
         settings.MCP_SERVER_NAME: {
             "url": settings.MCP_SERVER_URL,
@@ -166,7 +166,7 @@ async def _connect_single_server(
 async def get_mcp_tools(sso_token: str | None = None) -> list:
     """Connect to MCP server(s) and retrieve available tools.
 
-    Loads server definitions from ``agent_config/mcp_servers.json`` (or
+    Loads server definitions from ``agent_config/mcp.json`` (or
     falls back to env-var settings), connects to each enabled server in
     parallel, and returns a deduplicated flat list of tools.
 

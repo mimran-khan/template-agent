@@ -129,7 +129,7 @@ class TestLoadServerConfigs:
 
     def test_loads_from_json(self, tmp_path):
         """Test loading from a valid JSON config file."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -155,7 +155,7 @@ class TestLoadServerConfigs:
 
     def test_rejects_missing_url(self, tmp_path):
         """Test that missing 'url' field raises a validation error."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps({"mcpServers": {"bad": {"transport": "streamable_http"}}})
         )
@@ -167,7 +167,7 @@ class TestLoadServerConfigs:
 
     def test_rejects_invalid_json(self, tmp_path):
         """Test that malformed JSON raises a validation error."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text("{bad json")
 
         with patch("template_agent.src.core.mcp._CONFIG_PATH", config_file):
@@ -181,7 +181,7 @@ class TestGetMCPTools:
     @pytest.mark.asyncio
     async def test_successful_connection(self, tmp_path):
         """Test successful MCP connection with tools."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -220,7 +220,7 @@ class TestGetMCPTools:
     @pytest.mark.asyncio
     async def test_deduplicates_tools(self, tmp_path):
         """Test that duplicate tool names are deduplicated (first wins)."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -276,7 +276,7 @@ class TestGetMCPTools:
     @pytest.mark.asyncio
     async def test_errors_in_development_mode(self, tmp_path):
         """Test errors return empty list in development mode."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -315,7 +315,7 @@ class TestGetMCPTools:
     @pytest.mark.asyncio
     async def test_errors_in_production_mode(self, tmp_path):
         """Test errors raise AppException in production mode."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -354,7 +354,7 @@ class TestGetMCPTools:
     @pytest.mark.asyncio
     async def test_no_enabled_servers_dev_mode(self, tmp_path):
         """Test that no enabled servers returns empty list in dev mode."""
-        config_file = tmp_path / "mcp_servers.json"
+        config_file = tmp_path / "mcp.json"
         config_file.write_text(
             json.dumps(
                 {
@@ -386,7 +386,7 @@ class TestGetMCPTools:
         mock_client = MagicMock()
         mock_client.get_tools = AsyncMock(return_value=[mock_tool])
 
-        fake_path = Path("/nonexistent/mcp_servers.json")
+        fake_path = Path("/nonexistent/mcp.json")
 
         with (
             patch("template_agent.src.core.mcp._CONFIG_PATH", fake_path),
