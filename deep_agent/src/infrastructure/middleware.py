@@ -54,6 +54,8 @@ def build_middleware_list(
         )
 
     _append_guardrails(middlewares, resolved)
+    _append_btw_middleware(middlewares, resolved)
+    _append_plan_review_middleware(middlewares, resolved)
 
     for dotted_path in resolved.extra_middleware:
         _append_if_built(middlewares, _import_middleware(dotted_path))
@@ -252,6 +254,44 @@ def _build_summarization_tool_middleware(
     except Exception as e:
         logger.warning("Failed to create SummarizationToolMiddleware: %s", e)
         return None
+
+
+def _append_btw_middleware(
+    target: list[Any], resolved: ResolvedMiddlewareConfig
+) -> None:
+    """Build and append BtwMiddleware if btw is enabled in config."""
+    if not getattr(resolved, "btw_enabled", False):
+        return
+    try:
+        from deep_agent.src.btw.middleware import BtwMiddleware
+
+        target.append(BtwMiddleware())
+        logger.info("BtwMiddleware enabled")
+    except ImportError:
+        logger.debug("BtwMiddleware not available")
+
+
+def _append_plan_review_middleware(
+    target: list[Any], resolved: ResolvedMiddlewareConfig
+) -> None:
+    """Build and append PlanReviewMiddleware if plan_review is enabled."""
+    if not getattr(resolved, "plan_review_enabled", False):
+        return
+    try:
+        from deep_agent.src.btw.plan_review import PlanReviewMiddleware
+
+        mw = PlanReviewMiddleware(
+            min_steps=getattr(resolved, "plan_review_min_steps", 3),
+            trigger_keywords=getattr(
+                resolved,
+                "plan_review_trigger_keywords",
+                ("plan", "steps", "I'll do the following"),
+            ),
+        )
+        target.append(mw)
+        logger.info("PlanReviewMiddleware enabled (min_steps=%d)", mw.min_steps)
+    except ImportError:
+        logger.debug("PlanReviewMiddleware not available")
 
 
 def _import_middleware(dotted_path: str) -> Any | None:

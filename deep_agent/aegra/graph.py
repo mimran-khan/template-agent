@@ -57,6 +57,47 @@ _graph_cache: dict[str, Any] = {}
 _graph_cache_ts: dict[str, float] = {}
 
 
+def _build_interrupt_on(
+    hitl_config: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Convert YAML hitl config into the ``interrupt_on`` dict for create_deep_agent.
+
+    Supports two modes set via ``hitl.mode``:
+    - ``selective`` (default): only tools listed under ``hitl.tools`` are gated.
+    - ``all_tools``: every tool call is gated (``interrupt_on=True`` for all).
+
+    Each tool entry may specify ``decisions`` (list of 'approve'|'reject'|'edit')
+    and a ``description`` shown to the user.
+    """
+    mode = hitl_config.get("mode", "selective")
+    tools_cfg: dict[str, Any] = hitl_config.get("tools", {})
+
+    if mode == "all_tools":
+        return {"__all__": True}
+
+    if not tools_cfg:
+        return None
+
+    from langchain.agents.middleware.human_in_the_loop import InterruptOnConfig
+
+    interrupt_on: dict[str, Any] = {}
+    for tool_name, tool_cfg in tools_cfg.items():
+        if isinstance(tool_cfg, bool):
+            interrupt_on[tool_name] = tool_cfg
+            continue
+        if not isinstance(tool_cfg, dict):
+            continue
+        decisions = tool_cfg.get("decisions", ["approve", "reject"])
+        description = tool_cfg.get("description", f"Review {tool_name} before execution")
+        ioc = InterruptOnConfig(
+            allowed_decisions=decisions,
+            description=description,
+        )
+        interrupt_on[tool_name] = ioc
+
+    return interrupt_on if interrupt_on else None
+
+
 def _graph_fingerprint(
     model_name: str,
     system_prompt: str,
@@ -229,6 +270,30 @@ async def agent(runtime: ServerRuntime) -> Any:
         "middleware": middleware,
         "memory": memory,
     }
+
+    hitl_config = orchestrator_cfg.get("hitl", {})
+    if hitl_config.get("enabled"):
+        interrupt_on = _build_interrupt_on(hitl_config)
+        if interrupt_on:
+            try:
+                from deep_agent.src.btw.hitl_middleware import (
+                    TrustAwareHITLMiddleware,
+                )
+                hitl_mw = TrustAwareHITLMiddleware(interrupt_on=interrupt_on)
+                if middleware is None:
+                    middleware = []
+                middleware.append(hitl_mw)
+                create_kwargs["middleware"] = middleware
+                logger.info(
+                    "HITL enabled (trust-aware): %d tool(s) gated",
+                    len(interrupt_on),
+                )
+            except ImportError:
+                create_kwargs["interrupt_on"] = interrupt_on
+                logger.info(
+                    "HITL enabled (standard): %d tool(s) gated",
+                    len(interrupt_on),
+                )
 
     import inspect
 

@@ -134,6 +134,24 @@ class MiddlewareFileConfig(BaseModel):
     profiles: dict[str, ProfileConfig] = Field(default_factory=dict)
 
 
+class BtwConfig(BaseModel):
+    """Config for BtwMiddleware — non-blocking context injection."""
+
+    enabled: bool = False
+    max_message_length: int = 2000
+    ttl_seconds: int = 3600
+
+
+class PlanReviewConfig(BaseModel):
+    """Config for PlanReviewMiddleware — interrupt on multi-step plans."""
+
+    enabled: bool = False
+    min_steps: int = 3
+    trigger_keywords: list[str] = Field(
+        default_factory=lambda: ["plan", "steps", "I'll do the following"]
+    )
+
+
 class ResolvedMiddlewareConfig(BaseModel):
     """Final resolved config for a single agent after merge."""
 
@@ -142,6 +160,12 @@ class ResolvedMiddlewareConfig(BaseModel):
     memory_namespaces: list[str] = Field(default_factory=lambda: ["memories"])
     patch_tool_calls_enabled: bool = True
     skills_enabled: bool = True
+    btw_enabled: bool = False
+    plan_review_enabled: bool = False
+    plan_review_min_steps: int = 3
+    plan_review_trigger_keywords: list[str] = Field(
+        default_factory=lambda: ["plan", "steps", "I'll do the following"]
+    )
     model_call_limit: ModelCallLimitConfig = Field(default_factory=ModelCallLimitConfig)
     tool_call_limit: ToolCallLimitConfig = Field(default_factory=ToolCallLimitConfig)
     model_retry: ModelRetryConfig = Field(default_factory=ModelRetryConfig)
@@ -224,12 +248,28 @@ def resolve_middleware(
     if "patch_tool_calls" in profile.excluded_middleware:
         patch_enabled = False
 
+    btw_enabled = _resolve_bool(False, overrides.get("btw"))
+
+    plan_review_enabled = _resolve_bool(False, overrides.get("plan_review"))
+    plan_review_min_steps = 3
+    plan_review_trigger_keywords = ["plan", "steps", "I'll do the following"]
+    pr_override = overrides.get("plan_review")
+    if isinstance(pr_override, dict):
+        plan_review_min_steps = int(pr_override.get("min_steps", plan_review_min_steps))
+        plan_review_trigger_keywords = pr_override.get(
+            "trigger_keywords", plan_review_trigger_keywords
+        )
+
     return ResolvedMiddlewareConfig(
         summarization_tool_enabled=summarization_enabled,
         memory_enabled=memory_enabled,
         memory_namespaces=memory_namespaces,
         patch_tool_calls_enabled=patch_enabled,
         skills_enabled=skills_enabled,
+        btw_enabled=btw_enabled,
+        plan_review_enabled=plan_review_enabled,
+        plan_review_min_steps=plan_review_min_steps,
+        plan_review_trigger_keywords=plan_review_trigger_keywords,
         model_call_limit=defaults.model_call_limit,
         tool_call_limit=defaults.tool_call_limit,
         model_retry=defaults.model_retry,

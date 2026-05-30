@@ -11,16 +11,27 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 
-def stream_request_to_langgraph_input(message: str) -> dict[str, Any]:
+def stream_request_to_langgraph_input(
+    message: str,
+    *,
+    command: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Convert a raw user message into LangGraph-compatible input.
 
     Args:
         message: The user's text message.
+        command: Optional LangGraph command dict (e.g. ``{"resume": ...}``).
+            When present the returned dict includes a ``command`` key so
+            callers can forward it to ``graph.invoke()`` / ``graph.stream()``.
 
     Returns:
-        Dict with ``messages`` key containing a HumanMessage list.
+        Dict with ``messages`` key containing a HumanMessage list, and
+        optionally a ``command`` key for resume operations.
     """
-    return {"messages": [HumanMessage(content=message)]}
+    result: dict[str, Any] = {"messages": [HumanMessage(content=message)]}
+    if command is not None:
+        result["command"] = command
+    return result
 
 
 def langgraph_messages_to_dicts(messages: list) -> list[dict[str, Any]]:

@@ -51,6 +51,88 @@ def _convert_interrupts_to_messages(interrupts: list) -> list:
     return messages
 
 
+def _build_structured_interrupt_event(
+    interrupt_data: Any,
+) -> dict[str, Any] | None:
+    """Attempt to build a typed interrupt event from an interrupt object.
+
+    If the interrupt value is an ``HITLRequest`` (from deepagents HITL
+    middleware), emit a ``tool_approval`` event.  If it has a
+    ``plan_steps`` key, emit a ``plan_review`` event.  Otherwise
+    return ``None`` so the caller falls back to the generic path.
+    """
+    value = getattr(interrupt_data, "value", interrupt_data)
+
+    if _is_hitl_request(value):
+        return _hitl_request_to_event(value)
+
+    if isinstance(value, dict) and "plan_steps" in value:
+        return {
+            "type": "interrupt",
+            "content": {
+                "interrupt_type": "plan_review",
+                "plan_steps": value["plan_steps"],
+                "resumable": True,
+            },
+        }
+
+    return None
+
+
+def _is_hitl_request(value: Any) -> bool:
+    """Return True if *value* looks like an HITLRequest object."""
+    return hasattr(value, "action_requests") or (
+        isinstance(value, dict) and "action_requests" in value
+    )
+
+
+def _hitl_request_to_event(value: Any) -> dict[str, Any]:
+    """Convert an HITLRequest (or dict equivalent) to a structured SSE event."""
+    if isinstance(value, dict):
+        action_requests = value.get("action_requests", [])
+        review_configs = value.get("review_configs", [])
+    else:
+        action_requests = getattr(value, "action_requests", [])
+        review_configs = getattr(value, "review_configs", [])
+
+    serialised_actions = []
+    for ar in action_requests:
+        if isinstance(ar, dict):
+            serialised_actions.append(ar)
+        else:
+            serialised_actions.append(
+                {
+                    "tool_name": getattr(ar, "tool_name", getattr(ar, "action", "unknown")),
+                    "tool_args": getattr(ar, "args", {}),
+                }
+            )
+
+    serialised_configs = []
+    for rc in review_configs:
+        if isinstance(rc, dict):
+            serialised_configs.append(rc)
+        else:
+            serialised_configs.append(
+                {
+                    "allowed_decisions": getattr(
+                        rc, "allowed_decisions", ["approve", "reject"]
+                    ),
+                    "description": getattr(rc, "description", ""),
+                }
+            )
+
+    return {
+        "type": "interrupt",
+        "content": {
+            "interrupt_type": "tool_approval",
+            "action_requests": serialised_actions,
+            "review_configs": serialised_configs,
+            "resumable": True,
+            "supports_approve_all": True,
+        },
+    }
+
+
 def _convert_messages_to_events(
     messages: list, ctx: StreamContext
 ) -> list[dict[str, Any]]:
@@ -121,23 +203,33 @@ class UpdateEventHandler:
         Returns:
             List of formatted message events.
         """
-        messages = self._extract_and_deduplicate_messages(event)
-        return _convert_messages_to_events(messages, ctx)
+        structured_events, messages = self._extract_and_deduplicate_messages(event)
+        formatted = _convert_messages_to_events(messages, ctx)
+        return structured_events + formatted
 
-    def _extract_and_deduplicate_messages(self, event: dict[str, Any]) -> list:
+    def _extract_and_deduplicate_messages(
+        self, event: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], list]:
         """Extract and deduplicate messages from update event.
 
-        Args:
-            event: Update event dictionary.
-
         Returns:
-            List of messages to process.
+            A 2-tuple: (structured_events, messages).
+            ``structured_events`` are pre-formatted interrupt events that
+            bypass the normal message → event pipeline.
         """
-        all_messages = []
+        all_messages: list = []
+        structured_events: list[dict[str, Any]] = []
 
         for node, updates in event.items():
             if node == "__interrupt__":
-                all_messages.extend(_convert_interrupts_to_messages(updates))
+                for interrupt_data in updates:
+                    structured = _build_structured_interrupt_event(interrupt_data)
+                    if structured is not None:
+                        structured_events.append(structured)
+                    else:
+                        all_messages.extend(
+                            _convert_interrupts_to_messages([interrupt_data])
+                        )
                 continue
 
             updates = updates or {}
@@ -146,16 +238,14 @@ class UpdateEventHandler:
             update_messages = raw_messages.value if is_overwrite else raw_messages
 
             if is_overwrite:
-                # Filter to only unseen messages
                 update_messages = self.deduplicator.get_unseen_messages(update_messages)
             else:
-                # Mark all messages as seen for future deduplication
                 for msg in update_messages:
                     self.deduplicator.mark_seen(msg)
 
             all_messages.extend(update_messages)
 
-        return all_messages
+        return structured_events, all_messages
 
 
 class TokenEventHandler:

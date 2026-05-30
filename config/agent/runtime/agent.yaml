@@ -140,6 +140,30 @@ middleware:
         strategy: redact
   extra: []
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Human-in-the-Loop & Agent Interaction Controls             [YAML-loaded]
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+hitl:
+  enabled: true
+  mode: selective
+  tools:
+    send_email:
+      decisions: [approve, reject]
+      description: "Review email before sending"
+    deploy_service:
+      decisions: [approve, reject]
+      description: "Confirm deployment"
+
+btw:
+  enabled: true
+  max_message_length: 2000
+  ttl_seconds: 3600
+
+plan_review:
+  enabled: true
+  min_steps: 3
+  trigger_keywords: ["plan", "steps", "I'll do the following"]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Async Tasks                                                    [YAML-loaded]
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async_tasks:

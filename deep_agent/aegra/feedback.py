@@ -258,3 +258,232 @@ async def get_agent_info() -> dict[str, str]:
 
 
 app.add_api_route("/feedback", feedback_handler, methods=["POST"])
+
+
+# ---------------------------------------------------------------------------
+# /btw — Non-blocking context injection
+# ---------------------------------------------------------------------------
+
+
+class BtwRequest:
+    """Lightweight request model for /btw endpoint (avoids pydantic dep chain)."""
+
+    def __init__(self, thread_id: str, message: str, user_id: str | None = None):
+        self.thread_id = thread_id
+        self.message = message
+        self.user_id = user_id
+
+
+async def btw_handler(request: Request) -> JSONResponse:
+    """Accept a /btw context-injection message and queue it in Redis."""
+    try:
+        body_bytes = await request.body()
+        if not body_bytes.strip():
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "Empty body"},
+            )
+        payload = json.loads(body_bytes.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Invalid JSON body"},
+        )
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "JSON body must be an object"},
+        )
+
+    thread_id = payload.get("thread_id")
+    message = payload.get("message")
+    user_id = payload.get("user_id")
+
+    if not thread_id or not isinstance(thread_id, str):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "thread_id is required and must be a string"},
+        )
+    if not message or not isinstance(message, str):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "message is required and must be a string"},
+        )
+
+    try:
+        from deep_agent.src.btw.store import push_btw_message
+
+        depth = push_btw_message(
+            thread_id=thread_id,
+            message=message,
+            user_id=user_id,
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": str(exc)},
+        )
+    except RuntimeError as exc:
+        logger.warning("btw_endpoint_redis_unavailable", error=str(exc))
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Redis unavailable — /btw requires Redis"},
+        )
+
+    logger.info(
+        "btw_endpoint_accepted",
+        thread_id=thread_id,
+        user_id=user_id or "anonymous",
+        queue_depth=depth,
+    )
+    return JSONResponse(
+        status_code=200,
+        content={"status": "queued", "queue_depth": depth},
+    )
+
+
+app.add_api_route("/btw", btw_handler, methods=["POST"])
+
+
+# ---------------------------------------------------------------------------
+# /trust — Session-level trust management (approve-all)
+# ---------------------------------------------------------------------------
+
+
+async def trust_handler(request: Request) -> JSONResponse:
+    """Set or revoke session-level trust (approve-all for tool calls)."""
+    try:
+        body_bytes = await request.body()
+        if not body_bytes.strip():
+            return JSONResponse(status_code=422, content={"detail": "Empty body"})
+        payload = json.loads(body_bytes.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JSONResponse(status_code=422, content={"detail": "Invalid JSON body"})
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=422, content={"detail": "JSON body must be an object"}
+        )
+
+    thread_id = payload.get("thread_id")
+    action = payload.get("action")  # "approve_all" | "revoke"
+
+    if not thread_id or not isinstance(thread_id, str):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "thread_id is required"},
+        )
+    if action not in ("approve_all", "revoke"):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "action must be 'approve_all' or 'revoke'"},
+        )
+
+    try:
+        from deep_agent.src.btw.trust import revoke_trust, set_trust_level
+
+        if action == "approve_all":
+            set_trust_level(thread_id, "approve_all")
+        else:
+            revoke_trust(thread_id)
+    except RuntimeError as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": str(exc)},
+        )
+
+    logger.info("trust_endpoint", thread_id=thread_id, action=action)
+    return JSONResponse(
+        status_code=200,
+        content={"status": action, "thread_id": thread_id},
+    )
+
+
+app.add_api_route("/trust", trust_handler, methods=["POST"])
+
+
+# ---------------------------------------------------------------------------
+# /resume — Convenience endpoint for resuming interrupted runs
+# ---------------------------------------------------------------------------
+
+
+async def resume_handler(request: Request) -> JSONResponse:
+    """Accept a resume payload and forward it to the LangGraph Platform API.
+
+    Body schema:
+        {
+          "thread_id": "...",
+          "resume": { ... }           # HITLResponse / PlanDecision payload
+          "assistant_id": "agent"     # optional, defaults to "agent"
+        }
+
+    This is a thin proxy so the frontend has a single base-URL to target
+    rather than constructing the LangGraph Platform ``/threads/.../runs``
+    path itself.  For environments where Aegra provides its own resume
+    route, the frontend can call that directly instead.
+    """
+    try:
+        body_bytes = await request.body()
+        if not body_bytes.strip():
+            return JSONResponse(status_code=422, content={"detail": "Empty body"})
+        payload = json.loads(body_bytes.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JSONResponse(status_code=422, content={"detail": "Invalid JSON body"})
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=422, content={"detail": "JSON body must be an object"}
+        )
+
+    thread_id = payload.get("thread_id")
+    resume_value = payload.get("resume")
+
+    if not thread_id or not isinstance(thread_id, str):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "thread_id is required"},
+        )
+    if resume_value is None:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "resume payload is required"},
+        )
+
+    enriched_resume = resume_value
+    try:
+        from deep_agent.src.btw.plan_decision import (
+            build_plan_decision_message,
+            is_plan_decision,
+        )
+
+        if is_plan_decision(resume_value):
+            system_msg = build_plan_decision_message(resume_value)
+            enriched_resume = {
+                **resume_value,
+                "system_message": system_msg,
+            }
+            logger.info(
+                "resume_plan_decision_enriched",
+                thread_id=thread_id,
+            )
+    except ImportError:
+        pass
+
+    logger.info(
+        "resume_endpoint_accepted",
+        thread_id=thread_id,
+        resume_type=type(resume_value).__name__,
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "accepted",
+            "thread_id": thread_id,
+            "command": {"resume": enriched_resume},
+        },
+    )
+
+
+app.add_api_route("/resume", resume_handler, methods=["POST"])
